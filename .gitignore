@@ -6,6 +6,9 @@ node_modules/
 # Testing
 coverage/
 
+# Scripts
+scripts/serviceAccountKey.json
+
 # Production
 build/
 dist/
@@ -17,6 +20,9 @@ dist/
 .env.development.local
 .env.test.local
 .env.production.local
+# Local secrets (not tracked)
+secret/
+.secret/
 
 # Logs
 npm-debug.log*
