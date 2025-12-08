@@ -15,6 +15,7 @@ import {
   Timestamp,
   getDocs,
   updateDoc,
+  deleteDoc,
   arrayUnion,
 } from 'firebase/firestore';
 import { db } from '../firebase/config';
@@ -157,5 +158,35 @@ export const getUserChatRooms = async (userId) => {
     id: doc.id,
     ...doc.data(),
   }));
+};
+
+/**
+ * Subscribe to chat rooms for a user (real-time)
+ * @param {string} userId - User ID
+ * @param {Function} callback - Callback function that receives rooms array
+ * @returns {Function} Unsubscribe function
+ */
+export const subscribeToUserChatRooms = (userId, callback) => {
+  const roomsRef = collection(db, 'rooms');
+  const q = query(roomsRef, where('members', 'array-contains', userId));
+  
+  return onSnapshot(q, (snapshot) => {
+    const rooms = snapshot.docs.map(doc => ({
+      id: doc.id,
+      ...doc.data(),
+    }));
+    callback(rooms);
+  });
+};
+
+/**
+ * Delete a message
+ * @param {string} roomId - Chat room ID
+ * @param {string} messageId - Message document ID
+ * @returns {Promise<void>}
+ */
+export const deleteMessage = async (roomId, messageId) => {
+  const messageRef = doc(db, 'rooms', roomId, 'messages', messageId);
+  await deleteDoc(messageRef);
 };
 

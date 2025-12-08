@@ -30,11 +30,14 @@ const INVITES_COLLECTION = 'invites';
 export const createInvite = async (landlordId, tenantEmail, propertyId = null) => {
   const invitesRef = collection(db, INVITES_COLLECTION);
   
-  // Check if invite already exists
+  // Normalize email for consistency
+  const normalizedEmail = tenantEmail.toLowerCase().trim();
+  
+  // Check if invite already exists (use normalized email)
   const q = query(
     invitesRef,
     where('landlordId', '==', landlordId),
-    where('tenantEmail', '==', tenantEmail),
+    where('tenantEmail', '==', normalizedEmail),
     where('status', '==', 'pending')
   );
   const existingInvites = await getDocs(q);
@@ -45,13 +48,15 @@ export const createInvite = async (landlordId, tenantEmail, propertyId = null) =
   
   const inviteData = {
     landlordId,
-    tenantEmail: tenantEmail.toLowerCase().trim(),
+    tenantEmail: normalizedEmail,
     propertyId,
     status: 'pending',
     createdAt: Timestamp.now(),
   };
   
+  console.log('Creating invite with data:', inviteData);
   const docRef = await addDoc(invitesRef, inviteData);
+  console.log('Invite created with ID:', docRef.id);
   return docRef.id;
 };
 
@@ -114,26 +119,52 @@ export const acceptInvite = async (inviteId, tenantId) => {
   
   const inviteData = inviteDoc.data();
   
-  // Update invite status
-  await updateDoc(inviteRef, {
-    status: 'accepted',
-    acceptedAt: Timestamp.now(),
-    tenantId,
-  });
+  // Check if already accepted
+  if (inviteData.status === 'accepted') {
+    console.log('Invite already accepted');
+    return;
+  }
+  
+  try {
+    // Update invite status first
+    await updateDoc(inviteRef, {
+      status: 'accepted',
+      acceptedAt: Timestamp.now(),
+      tenantId,
+    });
+    console.log('✅ Invite status updated to accepted');
+  } catch (error) {
+    console.error('Error updating invite status:', error);
+    throw new Error('Failed to update invite status: ' + error.message);
+  }
   
   // Update tenant's user document with landlordId and propertyId
-  const tenantRef = doc(db, 'users', tenantId);
-  await updateDoc(tenantRef, {
-    landlordId: inviteData.landlordId,
-    propertyId: inviteData.propertyId || null,
-  });
+  try {
+    const tenantRef = doc(db, 'users', tenantId);
+    await updateDoc(tenantRef, {
+      landlordId: inviteData.landlordId,
+      propertyId: inviteData.propertyId || null,
+    });
+    console.log('✅ Tenant user document updated');
+  } catch (error) {
+    console.error('Error updating tenant document:', error);
+    // Don't throw - invite is already accepted, user can manually update later
+    console.warn('Invite accepted but user document update failed. This may be a permission issue.');
+  }
   
   // If propertyId is provided, add tenant to property
   if (inviteData.propertyId) {
-    const { getPropertyByPropertyId, addTenantToProperty } = await import('./properties');
-    const property = await getPropertyByPropertyId(inviteData.propertyId);
-    if (property) {
-      await addTenantToProperty(property.id, tenantId);
+    try {
+      const { getPropertyByPropertyId, addTenantToProperty } = await import('./properties');
+      const property = await getPropertyByPropertyId(inviteData.propertyId);
+      if (property) {
+        await addTenantToProperty(property.id, tenantId);
+        console.log('✅ Tenant added to property');
+      }
+    } catch (error) {
+      console.error('Error adding tenant to property:', error);
+      // Don't throw - invite is already accepted, property update can be done manually
+      console.warn('Invite accepted but property update failed. This may be a permission issue.');
     }
   }
 };

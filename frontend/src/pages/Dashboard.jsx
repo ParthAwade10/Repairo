@@ -7,6 +7,8 @@ import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { signOut } from '../api/auth';
+import { doc, getDoc } from 'firebase/firestore';
+import { db } from '../firebase/config';
 import TenantDashboard from './TenantDashboard';
 import LandlordDashboard from './LandlordDashboard';
 import ContractorDashboard from './ContractorDashboard';
@@ -16,6 +18,7 @@ export default function Dashboard() {
   const { currentUser, userRole, loading } = useAuth();
   const navigate = useNavigate();
   const [localRole, setLocalRole] = useState(null);
+  const [checkingProperty, setCheckingProperty] = useState(false);
 
   // Check localStorage directly as fallback
   useEffect(() => {
@@ -94,6 +97,10 @@ export default function Dashboard() {
       </div>
     );
   }
+
+  // Don't auto-redirect tenants to property dashboard
+  // Let them access it manually or through the property dashboard link
+  // This prevents redirect loops if property can't be loaded
 
   switch (effectiveRole) {
     case 'tenant':

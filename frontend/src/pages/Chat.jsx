@@ -4,9 +4,9 @@
  */
 
 import { useState, useEffect, useRef } from 'react';
-import { useParams, useNavigate, useLocation } from 'react-router-dom';
+import { useParams, useNavigate, useLocation, Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import { subscribeToMessages, sendMessage, getChatRoomByRequestId, getChatRoomById } from '../api/messaging';
+import { subscribeToMessages, sendMessage, getChatRoomByRequestId, getChatRoomById, deleteMessage } from '../api/messaging';
 
 export default function Chat() {
   const { requestId, roomId: directRoomId } = useParams();
@@ -17,6 +17,7 @@ export default function Chat() {
   const [newMessage, setNewMessage] = useState('');
   const [roomId, setRoomId] = useState(null);
   const [chatTitle, setChatTitle] = useState('Chat');
+  const [hoveredMessageId, setHoveredMessageId] = useState(null);
   const messagesEndRef = useRef(null);
   const isDirectChat = location.pathname.includes('/chat/direct/');
 
@@ -78,6 +79,19 @@ export default function Chat() {
     }
   };
 
+  const handleDeleteMessage = async (messageId) => {
+    if (!roomId || !window.confirm('Are you sure you want to delete this message?')) {
+      return;
+    }
+
+    try {
+      await deleteMessage(roomId, messageId);
+    } catch (error) {
+      console.error('Error deleting message:', error);
+      alert('Failed to delete message: ' + error.message);
+    }
+  };
+
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   };
@@ -88,12 +102,22 @@ export default function Chat() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between h-16 items-center">
             <h1 className="text-xl font-bold text-gray-900">{chatTitle}</h1>
-            <button
-              onClick={() => navigate('/dashboard')}
-              className="text-gray-700 hover:text-gray-900"
-            >
-              Back to Dashboard
-            </button>
+            <div className="flex items-center gap-4">
+              {requestId && (
+                <Link
+                  to={`/maintenance/${requestId}`}
+                  className="text-blue-600 hover:text-blue-700 text-sm"
+                >
+                  View Request
+                </Link>
+              )}
+              <button
+                onClick={() => navigate('/dashboard')}
+                className="text-gray-700 hover:text-gray-900"
+              >
+                Back to Dashboard
+              </button>
+            </div>
           </div>
         </div>
       </nav>
@@ -107,33 +131,59 @@ export default function Chat() {
                 No messages yet. Start the conversation!
               </div>
             ) : (
-              messages.map((message) => (
-                <div
-                  key={message.id}
-                  className={`flex ${
-                    message.senderId === currentUser.uid ? 'justify-end' : 'justify-start'
-                  }`}
-                >
+              messages.map((message) => {
+                const isOwnMessage = message.senderId === currentUser.uid;
+                return (
                   <div
-                    className={`max-w-xs lg:max-w-md px-4 py-2 rounded-lg ${
-                      message.senderId === currentUser.uid
-                        ? 'bg-blue-600 text-white'
-                        : 'bg-gray-200 text-gray-900'
+                    key={message.id}
+                    className={`flex ${
+                      isOwnMessage ? 'justify-end' : 'justify-start'
                     }`}
+                    onMouseEnter={() => setHoveredMessageId(message.id)}
+                    onMouseLeave={() => setHoveredMessageId(null)}
                   >
-                    <p className="text-sm">{message.text}</p>
-                    <p
-                      className={`text-xs mt-1 ${
-                        message.senderId === currentUser.uid
-                          ? 'text-blue-100'
-                          : 'text-gray-500'
+                    <div
+                      className={`max-w-xs lg:max-w-md px-4 py-2 rounded-lg relative group ${
+                        isOwnMessage
+                          ? 'bg-blue-600 text-white'
+                          : 'bg-gray-200 text-gray-900'
                       }`}
                     >
-                      {message.timestamp?.toDate().toLocaleTimeString()}
-                    </p>
+                      {isOwnMessage && hoveredMessageId === message.id && (
+                        <button
+                          onClick={() => handleDeleteMessage(message.id)}
+                          className="absolute -top-2 -right-2 bg-red-500 hover:bg-red-600 text-white rounded-full p-1 shadow-lg transition"
+                          title="Delete message"
+                        >
+                          <svg
+                            className="w-3 h-3"
+                            fill="none"
+                            stroke="currentColor"
+                            viewBox="0 0 24 24"
+                          >
+                            <path
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                              strokeWidth={2}
+                              d="M6 18L18 6M6 6l12 12"
+                            />
+                          </svg>
+                        </button>
+                      )}
+                      <p className="text-sm">{message.text}</p>
+                      <p
+                        className={`text-xs mt-1 ${
+                          isOwnMessage
+                            ? 'text-blue-100'
+                            : 'text-gray-500'
+                        }`}
+                      >
+                        {message.timestamp?.toDate().toLocaleTimeString()}
+                      </p>
+                    </div>
                   </div>
-                </div>
-              ))
+                );
+              })
             )}
             <div ref={messagesEndRef} />
           </div>

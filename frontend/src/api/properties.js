@@ -86,6 +86,7 @@ export const createProperty = async (landlordId, addressData, landlordEmail = nu
     city: addressData.city?.trim() || '',
     state: addressData.state?.trim() || '',
     zipcode: addressData.zipcode?.trim() || '',
+    county: addressData.county?.trim() || '',
     address: fullAddress, // Full address for backward compatibility and display
     propertyId: generatePropertyId(),
     tenantIds: [],
@@ -262,23 +263,37 @@ export const deleteProperty = async (propertyDocId) => {
  */
 export const getPropertyTenants = async (propertyDocId) => {
   const property = await getProperty(propertyDocId);
-  if (!property || !property.tenantIds || property.tenantIds.length === 0) {
+  console.log('🔍 getPropertyTenants - Property:', propertyDocId, 'tenantIds:', property?.tenantIds);
+  
+  if (!property) {
+    console.warn('🔍 Property not found:', propertyDocId);
     return [];
   }
   
+  if (!property.tenantIds || property.tenantIds.length === 0) {
+    console.warn('🔍 Property has no tenantIds or empty array');
+    return [];
+  }
+  
+  console.log('🔍 Loading', property.tenantIds.length, 'tenants from property');
   const tenants = [];
   for (const tenantId of property.tenantIds) {
     try {
       const tenantRef = doc(db, 'users', tenantId);
       const tenantDoc = await getDoc(tenantRef);
       if (tenantDoc.exists()) {
-        tenants.push({ id: tenantDoc.id, ...tenantDoc.data() });
+        const tenantData = tenantDoc.data();
+        tenants.push({ id: tenantDoc.id, ...tenantData });
+        console.log('✅ Loaded tenant:', tenantId, tenantData.email || 'no email');
+      } else {
+        console.warn('⚠️ Tenant document does not exist:', tenantId);
       }
     } catch (error) {
-      console.error(`Error loading tenant ${tenantId}:`, error);
+      console.error(`❌ Error loading tenant ${tenantId}:`, error);
     }
   }
   
+  console.log('✅ getPropertyTenants returning', tenants.length, 'tenants');
   return tenants;
 };
 
@@ -289,16 +304,40 @@ export const getPropertyTenants = async (propertyDocId) => {
  */
 export const getPropertyMaintenanceRequests = async (propertyId) => {
   const maintenanceRef = collection(db, 'maintenanceRequests');
-  const q = query(
-    maintenanceRef,
-    where('propertyId', '==', propertyId),
-    orderBy('createdAt', 'desc')
-  );
   
-  const querySnapshot = await getDocs(q);
-  return querySnapshot.docs.map(doc => ({
-    id: doc.id,
-    ...doc.data(),
-  }));
+  try {
+    const q = query(
+      maintenanceRef,
+      where('propertyId', '==', propertyId),
+      orderBy('createdAt', 'desc')
+    );
+    
+    const querySnapshot = await getDocs(q);
+    return querySnapshot.docs.map(doc => ({
+      id: doc.id,
+      ...doc.data(),
+    }));
+  } catch (error) {
+    // If orderBy fails (missing index), try without it
+    if (error.code === 'failed-precondition') {
+      console.warn('Index missing for maintenance requests, trying query without orderBy');
+      const q = query(
+        maintenanceRef,
+        where('propertyId', '==', propertyId)
+      );
+      const querySnapshot = await getDocs(q);
+      const requests = querySnapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data(),
+      }));
+      // Sort client-side
+      return requests.sort((a, b) => {
+        const aTime = a.createdAt?.toDate?.() || new Date(0);
+        const bTime = b.createdAt?.toDate?.() || new Date(0);
+        return bTime - aTime; // Descending order
+      });
+    }
+    throw error;
+  }
 };
 
