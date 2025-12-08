@@ -28,9 +28,11 @@ try {
  * @param {string} email - User email
  * @param {string} password - User password
  * @param {string} role - User role (tenant, landlord, contractor, admin)
+ * @param {string} firstName - User first name
+ * @param {string} lastName - User last name
  * @returns {Promise} User credential
  */
-export const createUserWithRole = async (email, password, role) => {
+export const createUserWithRole = async (email, password, role, firstName = '', lastName = '') => {
   // First create the user
   const userCredential = await createUserWithEmailAndPassword(auth, email, password);
   const uid = userCredential.user.uid;
@@ -58,6 +60,13 @@ export const createUserWithRole = async (email, password, role) => {
       role,
       createdAt: new Date(),
     };
+    
+    // Add name fields if provided
+    if (firstName && lastName) {
+      userData.firstName = firstName;
+      userData.lastName = lastName;
+      userData.name = `${firstName} ${lastName}`;
+    }
     
     // Auto-assign landlordId to landlords (their own UID)
     if (role === 'landlord') {

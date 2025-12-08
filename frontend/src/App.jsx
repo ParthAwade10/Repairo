@@ -11,6 +11,9 @@ import Signup from './pages/Signup';
 import Dashboard from './pages/Dashboard';
 import CreateMaintenanceRequest from './pages/CreateMaintenanceRequest';
 import Chat from './pages/Chat';
+import Profile from './pages/Profile';
+import MaintenanceRequestDetail from './pages/MaintenanceRequestDetail';
+import PropertyDashboard from './pages/PropertyDashboard';
 
 function App() {
   return (
@@ -36,6 +39,14 @@ function App() {
             }
           />
           <Route
+            path="/maintenance/:requestId"
+            element={
+              <ProtectedRoute>
+                <MaintenanceRequestDetail />
+              </ProtectedRoute>
+            }
+          />
+          <Route
             path="/maintenance/:requestId/chat"
             element={
               <ProtectedRoute>
@@ -48,6 +59,22 @@ function App() {
             element={
               <ProtectedRoute>
                 <Chat />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/profile"
+            element={
+              <ProtectedRoute>
+                <Profile />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/property"
+            element={
+              <ProtectedRoute requiredRoles={['tenant']}>
+                <PropertyDashboard />
               </ProtectedRoute>
             }
           />

@@ -4,6 +4,7 @@
  */
 
 import { useState, useEffect } from 'react';
+import { Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { signOut } from '../api/auth';
 
@@ -18,7 +19,13 @@ export default function AdminDashboard() {
             <div className="flex items-center">
               <h1 className="text-xl font-bold text-gray-900">Repairo - Admin Dashboard</h1>
             </div>
-            <div className="flex items-center">
+            <div className="flex items-center space-x-4">
+              <Link
+                to="/profile"
+                className="text-gray-700 hover:text-gray-900 px-4 py-2 rounded-md hover:bg-gray-100"
+              >
+                Profile
+              </Link>
               <button
                 onClick={async () => {
                   await signOut();

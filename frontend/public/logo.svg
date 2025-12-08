@@ -1,0 +1,15 @@
+<svg width="512" height="512" viewBox="0 0 512 512" fill="none" xmlns="http://www.w3.org/2000/svg" shape-rendering="geometricPrecision">
+  <!-- Location Pin Shape - Dark Navy Blue -->
+  <path d="M256 32C176 32 112 96 112 176C112 256 256 448 256 448C256 448 400 256 400 176C400 96 336 32 256 32Z" fill="#0f2f4c"/>
+  
+  <!-- Fuel Injector Symbol (white) - T-shaped top, vertical shaft, tapered bottom -->
+  <!-- T-shaped top section -->
+  <rect x="200" y="140" width="112" height="24" fill="white" rx="2"/>
+  <rect x="240" y="140" width="32" height="8" fill="white"/>
+  
+  <!-- Vertical shaft -->
+  <rect x="248" y="164" width="16" height="180" fill="white" rx="1"/>
+  
+  <!-- Tapered/notched bottom -->
+  <path d="M248 344 L244 360 L268 360 L264 344 Z" fill="white"/>
+</svg>

@@ -17,6 +17,8 @@ export default function CreateMaintenanceRequest() {
   const [description, setDescription] = useState('');
   const [propertyId, setPropertyId] = useState('');
   const [landlordId, setLandlordId] = useState('');
+  const [role, setRole] = useState('');
+  const [userName, setUserName] = useState('');
   const [images, setImages] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -33,6 +35,11 @@ export default function CreateMaintenanceRequest() {
         
         if (userDoc.exists()) {
           const userData = userDoc.data();
+          setRole(userData.role || '');
+          const fullName = userData.firstName && userData.lastName
+            ? `${userData.firstName} ${userData.lastName}`
+            : userData.name || '';
+          setUserName(fullName);
           if (userData.propertyId) {
             setPropertyId(userData.propertyId);
           }
@@ -61,19 +68,46 @@ export default function CreateMaintenanceRequest() {
     setError('');
     setLoading(true);
 
+    // Validate required fields
+    if (!title.trim()) {
+      setError('Title is required');
+      setLoading(false);
+      return;
+    }
+
+    if (!description.trim()) {
+      setError('Description is required');
+      setLoading(false);
+      return;
+    }
+
     try {
+      // Landlords must select a property
+      if (role === 'landlord' && !propertyId.trim()) {
+        setError('Please provide a Property ID to create a request.');
+        setLoading(false);
+        return;
+      }
+
       const requestData = {
-        title,
-        description,
-        propertyId,
-        tenantId: currentUser.uid,
-        landlordId,
+        title: title.trim(),
+        description: description.trim(),
+        propertyId: propertyId || null,
+        tenantId: role === 'tenant' ? currentUser.uid : null,
+        landlordId: role === 'landlord' ? currentUser.uid : (landlordId || null),
+        tenantName: role === 'tenant' ? userName : null,
+        tenantEmail: role === 'tenant' ? currentUser.email : null,
+        creatorId: currentUser.uid,
+        creatorName: userName || currentUser.email,
+        creatorEmail: currentUser.email,
       };
 
       await createMaintenanceRequest(requestData, images);
+      // Keep user on dashboard for a consistent interface
       navigate('/dashboard');
     } catch (err) {
-      setError(err.message || 'Failed to create request');
+      console.error('Error creating request:', err);
+      setError(err.message || 'Failed to create request. Make sure you are logged in and have a property assigned.');
     } finally {
       setLoading(false);
     }
@@ -121,39 +155,37 @@ export default function CreateMaintenanceRequest() {
 
           <div>
             <label htmlFor="propertyId" className="block text-sm font-medium text-gray-700">
-              Property ID
+              Property ID (optional - auto-filled if available)
             </label>
             <input
               type="text"
               id="propertyId"
-              required
               disabled={loadingTenantData || !!propertyId}
               className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 disabled:bg-gray-100 disabled:cursor-not-allowed"
               value={propertyId}
               onChange={(e) => setPropertyId(e.target.value)}
-              placeholder={loadingTenantData ? 'Loading...' : 'Property ID'}
+              placeholder={loadingTenantData ? 'Loading...' : 'Property ID (optional)'}
             />
             {propertyId && (
-              <p className="mt-1 text-sm text-gray-500">Auto-populated from your account</p>
+              <p className="mt-1 text-sm text-green-600">✓ Auto-populated from your account</p>
             )}
           </div>
 
           <div>
             <label htmlFor="landlordId" className="block text-sm font-medium text-gray-700">
-              Landlord ID
+              Landlord ID (optional - auto-filled if available)
             </label>
             <input
               type="text"
               id="landlordId"
-              required
               disabled={loadingTenantData || !!landlordId}
               className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 disabled:bg-gray-100 disabled:cursor-not-allowed"
               value={landlordId}
               onChange={(e) => setLandlordId(e.target.value)}
-              placeholder={loadingTenantData ? 'Loading...' : 'Landlord ID'}
+              placeholder={loadingTenantData ? 'Loading...' : 'Landlord ID (optional)'}
             />
             {landlordId && (
-              <p className="mt-1 text-sm text-gray-500">Auto-populated from your account</p>
+              <p className="mt-1 text-sm text-green-600">✓ Auto-populated from your account</p>
             )}
           </div>
 
