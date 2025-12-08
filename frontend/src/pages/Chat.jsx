@@ -4,22 +4,25 @@
  */
 
 import { useState, useEffect, useRef } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import { subscribeToMessages, sendMessage, getChatRoomByRequestId } from '../api/messaging';
+import { subscribeToMessages, sendMessage, getChatRoomByRequestId, getChatRoomById } from '../api/messaging';
 
 export default function Chat() {
-  const { requestId } = useParams();
+  const { requestId, roomId: directRoomId } = useParams();
+  const location = useLocation();
   const { currentUser } = useAuth();
   const navigate = useNavigate();
   const [messages, setMessages] = useState([]);
   const [newMessage, setNewMessage] = useState('');
   const [roomId, setRoomId] = useState(null);
+  const [chatTitle, setChatTitle] = useState('Chat');
   const messagesEndRef = useRef(null);
+  const isDirectChat = location.pathname.includes('/chat/direct/');
 
   useEffect(() => {
     loadChatRoom();
-  }, [requestId]);
+  }, [requestId, directRoomId, isDirectChat]);
 
   useEffect(() => {
     if (roomId) {
@@ -36,12 +39,26 @@ export default function Chat() {
 
   const loadChatRoom = async () => {
     try {
-      const room = await getChatRoomByRequestId(requestId);
-      if (room) {
-        setRoomId(room.id);
-      } else {
-        alert('Chat room not found');
-        navigate('/dashboard');
+      if (isDirectChat && directRoomId) {
+        // Direct chat - load by room ID
+        const room = await getChatRoomById(directRoomId);
+        if (room) {
+          setRoomId(room.id);
+          setChatTitle('Direct Message');
+        } else {
+          alert('Chat room not found');
+          navigate('/dashboard');
+        }
+      } else if (requestId) {
+        // Maintenance request chat
+        const room = await getChatRoomByRequestId(requestId);
+        if (room) {
+          setRoomId(room.id);
+          setChatTitle(`Chat - Request #${requestId.substring(0, 8)}`);
+        } else {
+          alert('Chat room not found');
+          navigate('/dashboard');
+        }
       }
     } catch (error) {
       console.error('Error loading chat room:', error);
@@ -70,7 +87,7 @@ export default function Chat() {
       <nav className="bg-white shadow">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between h-16 items-center">
-            <h1 className="text-xl font-bold text-gray-900">Chat - Request #{requestId}</h1>
+            <h1 className="text-xl font-bold text-gray-900">{chatTitle}</h1>
             <button
               onClick={() => navigate('/dashboard')}
               className="text-gray-700 hover:text-gray-900"

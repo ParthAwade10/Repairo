@@ -7,6 +7,7 @@ import {
   collection,
   doc,
   addDoc,
+  getDoc,
   query,
   where,
   orderBy,
@@ -19,31 +20,65 @@ import {
 import { db } from '../firebase/config';
 
 /**
- * Create a chat room for a maintenance request
- * @param {string} roomId - Unique room ID (typically maintenance request ID)
+ * Create a chat room for a maintenance request or direct messaging
+ * @param {string} roomId - Unique room ID (typically maintenance request ID or direct chat ID)
  * @param {string[]} members - Array of user IDs
- * @param {string} maintenanceRequestId - Associated maintenance request ID
+ * @param {string|null} maintenanceRequestId - Associated maintenance request ID (null for direct chats)
  * @returns {Promise<string>} Room document ID
  */
-export const createChatRoom = async (roomId, members, maintenanceRequestId) => {
+export const createChatRoom = async (roomId, members, maintenanceRequestId = null) => {
   const roomsRef = collection(db, 'rooms');
   
   // Check if room already exists
-  const q = query(roomsRef, where('maintenanceRequestId', '==', maintenanceRequestId));
-  const existingRooms = await getDocs(q);
-  
-  if (!existingRooms.empty) {
-    return existingRooms.docs[0].id;
+  if (maintenanceRequestId) {
+    const q = query(roomsRef, where('maintenanceRequestId', '==', maintenanceRequestId));
+    const existingRooms = await getDocs(q);
+    
+    if (!existingRooms.empty) {
+      return existingRooms.docs[0].id;
+    }
+  } else {
+    // For direct chats, check if a room with these exact members already exists
+    const q = query(roomsRef, where('members', 'array-contains', members[0]));
+    const existingRooms = await getDocs(q);
+    
+    // Find room with exact same members and no maintenanceRequestId
+    for (const doc of existingRooms.docs) {
+      const roomData = doc.data();
+      if (
+        !roomData.maintenanceRequestId &&
+        roomData.members.length === members.length &&
+        members.every(member => roomData.members.includes(member))
+      ) {
+        return doc.id;
+      }
+    }
   }
   
   const roomData = {
     members,
-    maintenanceRequestId,
     createdAt: Timestamp.now(),
   };
   
+  if (maintenanceRequestId) {
+    roomData.maintenanceRequestId = maintenanceRequestId;
+  }
+  
   const docRef = await addDoc(roomsRef, roomData);
   return docRef.id;
+};
+
+/**
+ * Get chat room by room ID (for direct chats)
+ */
+export const getChatRoomById = async (roomId) => {
+  const roomRef = doc(db, 'rooms', roomId);
+  const roomDoc = await getDoc(roomRef);
+  
+  if (roomDoc.exists()) {
+    return { id: roomDoc.id, ...roomDoc.data() };
+  }
+  return null;
 };
 
 /**

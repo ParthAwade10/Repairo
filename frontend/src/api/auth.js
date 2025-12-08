@@ -53,11 +53,18 @@ export const createUserWithRole = async (email, password, role) => {
   
   // Store role in Firestore as fallback (works even without Cloud Functions)
   try {
-    await setDoc(doc(db, 'users', uid), {
+    const userData = {
       email,
       role,
       createdAt: new Date(),
-    });
+    };
+    
+    // Auto-assign landlordId to landlords (their own UID)
+    if (role === 'landlord') {
+      userData.landlordId = uid;
+    }
+    
+    await setDoc(doc(db, 'users', uid), userData);
   } catch (error) {
     console.warn('Could not store role in Firestore (rules may not be deployed):', error.message);
     // Continue anyway - we have localStorage as backup

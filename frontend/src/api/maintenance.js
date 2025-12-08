@@ -110,6 +110,22 @@ export const getContractorRequests = async (contractorId) => {
 };
 
 /**
+ * Get all maintenance requests for a property
+ * @param {string} propertyId - Property ID (generated ID, not document ID)
+ * @returns {Promise<Array>} Array of maintenance request documents
+ */
+export const getPropertyRequests = async (propertyId) => {
+  const q = query(
+    collection(db, MAINTENANCE_COLLECTION),
+    where('propertyId', '==', propertyId),
+    orderBy('createdAt', 'desc')
+  );
+  
+  const querySnapshot = await getDocs(q);
+  return querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+};
+
+/**
  * Update maintenance request status
  */
 export const updateRequestStatus = async (requestId, status) => {

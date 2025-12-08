@@ -37,11 +37,15 @@ service cloud.firestore {
     match /maintenanceRequests/{requestId} {
       // Allow read if:
       // - User is admin
-      // - User is tenant and request belongs to them
+      // - User is tenant and request belongs to them OR belongs to same property
       // - User is landlord and request belongs to their property
       // - User is contractor and request is assigned to them
       allow read: if isAdmin() 
-        || (hasRole('tenant') && resource.data.tenantId == request.auth.uid)
+        || (hasRole('tenant') && (
+          resource.data.tenantId == request.auth.uid
+          || (resource.data.propertyId != null && 
+              get(/databases/$(database)/documents/users/$(request.auth.uid)).data.propertyId == resource.data.propertyId)
+        ))
         || (hasRole('landlord') && resource.data.landlordId == request.auth.uid)
         || (hasRole('contractor') && resource.data.contractorId == request.auth.uid);
       
@@ -116,7 +120,7 @@ service cloud.firestore {
       }
     }
     
-    // Properties Collection (if you add this later)
+    // Properties Collection
     match /properties/{propertyId} {
       // Allow read if:
       // - User is admin
@@ -126,29 +130,97 @@ service cloud.firestore {
         || (hasRole('landlord') && resource.data.landlordId == request.auth.uid)
         || (hasRole('tenant') && request.auth.uid in resource.data.tenantIds);
       
-      // Allow write if:
+      // Allow create if:
+      // - User is admin
+      // - User is landlord (from custom claims) and is setting themselves as the landlord
+      // - OR user is authenticated and setting themselves as landlord (fallback if role not in claims)
+      //   AND user document exists with landlord role
+      // - OR user is authenticated and setting themselves as landlord (most permissive - let app handle role check)
+      // Note: The most permissive rule is last - any authenticated user can create a property
+      // where they set themselves as landlord. The app should verify roles.
+      allow create: if isAdmin()
+        || (hasRole('landlord') && request.resource.data.landlordId == request.auth.uid)
+        || (request.auth != null 
+            && request.resource.data.landlordId == request.auth.uid
+            && exists(/databases/$(database)/documents/users/$(request.auth.uid))
+            && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'landlord')
+        || (request.auth != null && request.resource.data.landlordId == request.auth.uid);
+      
+      // Allow update if:
       // - User is admin
       // - User is landlord and owns the property
-      allow write: if isAdmin()
-        || (hasRole('landlord') && resource.data.landlordId == request.auth.uid);
+      allow update: if isAdmin()
+        || (hasRole('landlord') && resource.data.landlordId == request.auth.uid)
+        || (request.auth != null 
+            && resource.data.landlordId == request.auth.uid
+            && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'landlord');
+      
+      // Allow delete if:
+      // - User is admin
+      // - User is landlord and owns the property
+      allow delete: if isAdmin()
+        || (hasRole('landlord') && resource.data.landlordId == request.auth.uid)
+        || (request.auth != null 
+            && resource.data.landlordId == request.auth.uid
+            && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'landlord');
     }
     
     // Users Collection (if you store user profiles)
     match /users/{userId} {
       // Users can read their own profile
       // Admins can read all profiles
-      allow read: if isAdmin() || request.auth.uid == userId;
+      // Landlords can read profiles of their tenants
+      allow read: if isAdmin() 
+        || request.auth.uid == userId
+        || (hasRole('landlord') && resource.data.landlordId == request.auth.uid);
       
       // Users can update their own profile
       // Admins can update any profile
-      allow update: if isAdmin() || request.auth.uid == userId;
+      // Landlords can update their tenant profiles (for adding to properties)
+      allow update: if isAdmin() 
+        || request.auth.uid == userId
+        || (hasRole('landlord') && resource.data.landlordId == request.auth.uid);
       
-      // Users can create their own profile (during signup)
+      // Users can create their own profile (during signup or when needed)
       // Admins can create any profile
-      allow create: if isAdmin() || request.auth.uid == userId;
+      // Allow users to create their own profile even if it doesn't exist yet
+      allow create: if isAdmin() 
+        || request.auth.uid == userId
+        || (request.auth != null && request.auth.uid == userId);
       
       // Only admins can delete user profiles
       allow delete: if isAdmin();
+    }
+    
+    // Invites Collection
+    match /invites/{inviteId} {
+      // Allow read if:
+      // - User is admin
+      // - User is landlord and sent the invite
+      // - User is tenant and invite is for their email
+      allow read: if isAdmin()
+        || (hasRole('landlord') && resource.data.landlordId == request.auth.uid)
+        || (hasRole('tenant') && resource.data.tenantEmail == request.auth.token.email);
+      
+      // Allow create if:
+      // - User is admin
+      // - User is landlord (can send invites)
+      allow create: if isAdmin()
+        || (hasRole('landlord') && request.resource.data.landlordId == request.auth.uid);
+      
+      // Allow update if:
+      // - User is admin
+      // - User is tenant accepting/declining their own invite
+      // - User is landlord updating their own invite
+      allow update: if isAdmin()
+        || (hasRole('tenant') && resource.data.tenantEmail == request.auth.token.email)
+        || (hasRole('landlord') && resource.data.landlordId == request.auth.uid);
+      
+      // Allow delete if:
+      // - User is admin
+      // - User is landlord who sent the invite
+      allow delete: if isAdmin()
+        || (hasRole('landlord') && resource.data.landlordId == request.auth.uid);
     }
   }
 }

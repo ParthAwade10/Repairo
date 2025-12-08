@@ -3,10 +3,12 @@
  * Form to create a new maintenance request
  */
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { createMaintenanceRequest } from '../api/maintenance';
+import { doc, getDoc } from 'firebase/firestore';
+import { db } from '../firebase/config';
 
 export default function CreateMaintenanceRequest() {
   const { currentUser } = useAuth();
@@ -18,6 +20,36 @@ export default function CreateMaintenanceRequest() {
   const [images, setImages] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [loadingTenantData, setLoadingTenantData] = useState(true);
+
+  // Load tenant's propertyId and landlordId from Firestore
+  useEffect(() => {
+    const loadTenantData = async () => {
+      if (!currentUser) return;
+      
+      try {
+        const userDocRef = doc(db, 'users', currentUser.uid);
+        const userDoc = await getDoc(userDocRef);
+        
+        if (userDoc.exists()) {
+          const userData = userDoc.data();
+          if (userData.propertyId) {
+            setPropertyId(userData.propertyId);
+          }
+          if (userData.landlordId) {
+            setLandlordId(userData.landlordId);
+          }
+        }
+      } catch (error) {
+        console.warn('Could not load tenant property/landlord data:', error.message);
+        // Continue anyway - user can still fill in manually
+      } finally {
+        setLoadingTenantData(false);
+      }
+    };
+
+    loadTenantData();
+  }, [currentUser]);
 
   const handleImageChange = (e) => {
     const files = Array.from(e.target.files);
@@ -95,10 +127,15 @@ export default function CreateMaintenanceRequest() {
               type="text"
               id="propertyId"
               required
-              className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+              disabled={loadingTenantData || !!propertyId}
+              className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 disabled:bg-gray-100 disabled:cursor-not-allowed"
               value={propertyId}
               onChange={(e) => setPropertyId(e.target.value)}
+              placeholder={loadingTenantData ? 'Loading...' : 'Property ID'}
             />
+            {propertyId && (
+              <p className="mt-1 text-sm text-gray-500">Auto-populated from your account</p>
+            )}
           </div>
 
           <div>
@@ -109,10 +146,15 @@ export default function CreateMaintenanceRequest() {
               type="text"
               id="landlordId"
               required
-              className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+              disabled={loadingTenantData || !!landlordId}
+              className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 disabled:bg-gray-100 disabled:cursor-not-allowed"
               value={landlordId}
               onChange={(e) => setLandlordId(e.target.value)}
+              placeholder={loadingTenantData ? 'Loading...' : 'Landlord ID'}
             />
+            {landlordId && (
+              <p className="mt-1 text-sm text-gray-500">Auto-populated from your account</p>
+            )}
           </div>
 
           <div>
