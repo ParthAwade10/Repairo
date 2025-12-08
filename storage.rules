@@ -1,0 +1,53 @@
+/**
+ * Firebase Storage Security Rules
+ * Controls access to file uploads (maintenance request images)
+ */
+
+rules_version = '2';
+service firebase.storage {
+  match /b/{bucket}/o {
+    
+    // Helper function to get user role
+    function getUserRole() {
+      return request.auth.token.role;
+    }
+    
+    // Helper function to check if user is admin
+    function isAdmin() {
+      return getUserRole() == 'admin';
+    }
+    
+    // Maintenance request images
+    match /maintenance/{requestId}/{fileName} {
+      // Allow read if:
+      // - User is admin
+      // - User is authenticated (all authenticated users can view images)
+      allow read: if isAdmin() || request.auth != null;
+      
+      // Allow write if:
+      // - User is admin
+      // - User is tenant (can upload images for their requests)
+      allow write: if isAdmin() 
+        || (getUserRole() == 'tenant' && request.auth != null);
+      
+      // File size limit: 5MB
+      allow create: if request.resource.size < 5 * 1024 * 1024
+        && request.resource.contentType.matches('image/.*');
+    }
+    
+    // User profile images (if you add this later)
+    match /profiles/{userId}/{fileName} {
+      // Users can read all profile images
+      allow read: if request.auth != null;
+      
+      // Users can only upload their own profile image
+      allow write: if isAdmin() 
+        || (request.auth != null && request.auth.uid == userId);
+      
+      // File size limit: 2MB
+      allow create: if request.resource.size < 2 * 1024 * 1024
+        && request.resource.contentType.matches('image/.*');
+    }
+  }
+}
+

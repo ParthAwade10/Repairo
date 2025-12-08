@@ -1,0 +1,155 @@
+/**
+ * Firestore Security Rules
+ * Role-based access control for all collections
+ * 
+ * Rules ensure:
+ * - Tenants can only access their own maintenance requests
+ * - Contractors can only read assigned jobs
+ * - Landlords can access requests for their properties
+ * - Admins have full access
+ */
+
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // Helper function to get user role from custom claims
+    function getUserRole() {
+      return request.auth.token.role;
+    }
+    
+    // Helper function to check if user has required role
+    function hasRole(role) {
+      return getUserRole() == role;
+    }
+    
+    // Helper function to check if user has any of the required roles
+    function hasAnyRole(roles) {
+      return getUserRole() in roles;
+    }
+    
+    // Helper function to check if user is admin
+    function isAdmin() {
+      return hasRole('admin');
+    }
+    
+    // Maintenance Requests Collection
+    match /maintenanceRequests/{requestId} {
+      // Allow read if:
+      // - User is admin
+      // - User is tenant and request belongs to them
+      // - User is landlord and request belongs to their property
+      // - User is contractor and request is assigned to them
+      allow read: if isAdmin() 
+        || (hasRole('tenant') && resource.data.tenantId == request.auth.uid)
+        || (hasRole('landlord') && resource.data.landlordId == request.auth.uid)
+        || (hasRole('contractor') && resource.data.contractorId == request.auth.uid);
+      
+      // Allow create if:
+      // - User is admin
+      // - User is tenant (can create their own requests)
+      allow create: if isAdmin() 
+        || (hasRole('tenant') && request.resource.data.tenantId == request.auth.uid);
+      
+      // Allow update if:
+      // - User is admin
+      // - User is landlord (can update status, assign contractor)
+      // - User is contractor (can update status for assigned jobs)
+      allow update: if isAdmin()
+        || (hasRole('landlord') && resource.data.landlordId == request.auth.uid)
+        || (hasRole('contractor') && resource.data.contractorId == request.auth.uid);
+      
+      // Allow delete if:
+      // - User is admin only
+      allow delete: if isAdmin();
+    }
+    
+    // Chat Rooms Collection
+    match /rooms/{roomId} {
+      // Allow read if:
+      // - User is admin
+      // - User is a member of the room
+      allow read: if isAdmin() 
+        || request.auth.uid in resource.data.members;
+      
+      // Allow create if:
+      // - User is admin
+      // - User is creating a room and is included in members
+      allow create: if isAdmin()
+        || request.auth.uid in request.resource.data.members;
+      
+      // Allow update if:
+      // - User is admin
+      // - User is a member (can add other members)
+      allow update: if isAdmin()
+        || request.auth.uid in resource.data.members;
+      
+      // Allow delete if:
+      // - User is admin only
+      allow delete: if isAdmin();
+      
+      // Messages Subcollection
+      match /messages/{messageId} {
+        // Allow read if:
+        // - User is admin
+        // - User is a member of the parent room
+        allow read: if isAdmin() 
+          || request.auth.uid in get(/databases/$(database)/documents/rooms/$(roomId)).data.members;
+        
+        // Allow create if:
+        // - User is admin
+        // - User is a member of the parent room
+        allow create: if isAdmin()
+          || request.auth.uid in get(/databases/$(database)/documents/rooms/$(roomId)).data.members;
+        
+        // Allow update if:
+        // - User is admin
+        // - User is the sender (can edit own messages)
+        allow update: if isAdmin()
+          || resource.data.senderId == request.auth.uid;
+        
+        // Allow delete if:
+        // - User is admin
+        // - User is the sender (can delete own messages)
+        allow delete: if isAdmin()
+          || resource.data.senderId == request.auth.uid;
+      }
+    }
+    
+    // Properties Collection (if you add this later)
+    match /properties/{propertyId} {
+      // Allow read if:
+      // - User is admin
+      // - User is landlord and owns the property
+      // - User is tenant and lives in the property
+      allow read: if isAdmin()
+        || (hasRole('landlord') && resource.data.landlordId == request.auth.uid)
+        || (hasRole('tenant') && request.auth.uid in resource.data.tenantIds);
+      
+      // Allow write if:
+      // - User is admin
+      // - User is landlord and owns the property
+      allow write: if isAdmin()
+        || (hasRole('landlord') && resource.data.landlordId == request.auth.uid);
+    }
+    
+    // Users Collection (if you store user profiles)
+    match /users/{userId} {
+      // Users can read their own profile
+      // Admins can read all profiles
+      allow read: if isAdmin() || request.auth.uid == userId;
+      
+      // Users can update their own profile
+      // Admins can update any profile
+      allow update: if isAdmin() || request.auth.uid == userId;
+      
+      // Users can create their own profile (during signup)
+      // Admins can create any profile
+      allow create: if isAdmin() || request.auth.uid == userId;
+      
+      // Only admins can delete user profiles
+      allow delete: if isAdmin();
+    }
+  }
+}
+
