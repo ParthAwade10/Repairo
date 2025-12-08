@@ -1,7 +1,3 @@
-<<<<<<< HEAD
-# Repairo
-Repairo Maintenance Management Platform
-=======
 # Repairo - Maintenance Management Platform
 
 A comprehensive web platform for managing maintenance requests between tenants, landlords, and contractors. Built with React.js, Firebase, and modern web technologies.
@@ -371,11 +367,6 @@ export const getAISuggestions = async (requestId, description) => {
 3. Test thoroughly (especially security rules)
 4. Submit a pull request
 
-## 📄 License
-
-[Your License Here]
-
 ---
 
 **Built with ❤️ for property management**
->>>>>>> parth
