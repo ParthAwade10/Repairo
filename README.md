@@ -367,6 +367,10 @@ export const getAISuggestions = async (requestId, description) => {
 3. Test thoroughly (especially security rules)
 4. Submit a pull request
 
+## 📄 License
+
+[License Here]
+
 ---
 
 **Built with ❤️ for property management**

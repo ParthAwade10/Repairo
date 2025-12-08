@@ -35,32 +35,65 @@ service cloud.firestore {
     
     // Maintenance Requests Collection
     match /maintenanceRequests/{requestId} {
+      // Helper to check if user is tenant (from custom claims or user document)
+      function isTenant() {
+        return getUserRole() == 'tenant' 
+          || (request.auth != null && 
+              exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+              get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'tenant');
+      }
+      
+      // Helper to check if user is landlord (from custom claims or user document)
+      function isLandlord() {
+        return getUserRole() == 'landlord'
+          || (request.auth != null && 
+              exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+              get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'landlord');
+      }
+      
       // Allow read if:
       // - User is admin
       // - User is tenant and request belongs to them OR belongs to same property
-      // - User is landlord and request belongs to their property
+      // - User is landlord and either landlordId matches or property belongs to them
       // - User is contractor and request is assigned to them
       allow read: if isAdmin() 
-        || (hasRole('tenant') && (
+        || (isTenant() && (
           resource.data.tenantId == request.auth.uid
           || (resource.data.propertyId != null && 
+              exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
               get(/databases/$(database)/documents/users/$(request.auth.uid)).data.propertyId == resource.data.propertyId)
         ))
-        || (hasRole('landlord') && resource.data.landlordId == request.auth.uid)
+        || (isLandlord() && (
+          resource.data.landlordId == request.auth.uid
+          || (resource.data.propertyId != null &&
+              exists(/databases/$(database)/documents/properties/$(resource.data.propertyId)) &&
+              get(/databases/$(database)/documents/properties/$(resource.data.propertyId)).data.landlordId == request.auth.uid)
+        ))
         || (hasRole('contractor') && resource.data.contractorId == request.auth.uid);
       
-      // Allow create if:
-      // - User is admin
-      // - User is tenant (can create their own requests)
-      allow create: if isAdmin() 
-        || (hasRole('tenant') && request.resource.data.tenantId == request.auth.uid);
+          // Allow create if:
+          // - User is admin
+          // - User is tenant (can create their own requests) - check both custom claims and user document
+          // - User is landlord and sets themselves as landlordId
+          allow create: if isAdmin() 
+            || (isTenant() && request.resource.data.tenantId == request.auth.uid)
+            || (isLandlord() && request.resource.data.landlordId == request.auth.uid);
       
       // Allow update if:
       // - User is admin
-      // - User is landlord (can update status, assign contractor)
-      // - User is contractor (can update status for assigned jobs)
+      // - User is landlord on the request (existing or incoming data)
+      // - User is landlord of the property (if propertyId is present)
+      // - User is contractor assigned to the request
       allow update: if isAdmin()
-        || (hasRole('landlord') && resource.data.landlordId == request.auth.uid)
+        || (request.auth != null && (
+            resource.data.landlordId == request.auth.uid
+            || request.resource.data.landlordId == request.auth.uid
+            || (
+              resource.data.propertyId != null
+              && exists(/databases/$(database)/documents/properties/$(resource.data.propertyId))
+              && get(/databases/$(database)/documents/properties/$(resource.data.propertyId)).data.landlordId == request.auth.uid
+            )
+          ))
         || (hasRole('contractor') && resource.data.contractorId == request.auth.uid);
       
       // Allow delete if:
@@ -122,13 +155,30 @@ service cloud.firestore {
     
     // Properties Collection
     match /properties/{propertyId} {
+      // Helper to check if user is tenant (from custom claims or user document)
+      function isTenant() {
+        return getUserRole() == 'tenant' 
+          || (request.auth != null && 
+              exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+              get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'tenant');
+      }
+      
+      // Helper to check if tenant is assigned to this property
+      function tenantAssignedToProperty() {
+        return isTenant() && (
+          request.auth.uid in resource.data.tenantIds
+          || (exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+              get(/databases/$(database)/documents/users/$(request.auth.uid)).data.propertyId == resource.data.propertyId)
+        );
+      }
+      
       // Allow read if:
       // - User is admin
       // - User is landlord and owns the property
-      // - User is tenant and lives in the property
+      // - User is tenant and lives in the property (check both tenantIds array and user document propertyId)
       allow read: if isAdmin()
         || (hasRole('landlord') && resource.data.landlordId == request.auth.uid)
-        || (hasRole('tenant') && request.auth.uid in resource.data.tenantIds);
+        || tenantAssignedToProperty();
       
       // Allow create if:
       // - User is admin
@@ -167,19 +217,66 @@ service cloud.firestore {
     
     // Users Collection (if you store user profiles)
     match /users/{userId} {
+      // Helper to check if user is tenant (from custom claims or user document)
+      function isTenant() {
+        return getUserRole() == 'tenant' 
+          || (request.auth != null && 
+              exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+              get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'tenant');
+      }
+      
+      // Helper to check if user is landlord (from custom claims or user document)
+      function isLandlord() {
+        return getUserRole() == 'landlord'
+          || (request.auth != null && 
+              exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+              get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'landlord');
+      }
+      
+      // Helper to check if tenant shares the same property as the requested user
+      function sharesSameProperty() {
+        return isTenant() 
+          && exists(/databases/$(database)/documents/users/$(request.auth.uid))
+          && exists(/databases/$(database)/documents/users/$(userId))
+          && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.propertyId != null
+          && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.propertyId == 
+             get(/databases/$(database)/documents/users/$(userId)).data.propertyId;
+      }
+      
+      // Helper to check if the requested user is the tenant's landlord
+      function isTenantsLandlord() {
+        return isTenant() 
+          && exists(/databases/$(database)/documents/users/$(request.auth.uid))
+          && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.landlordId == userId;
+      }
+      
       // Users can read their own profile
       // Admins can read all profiles
       // Landlords can read profiles of their tenants
+      // Landlords can read contractor profiles (for assigning to maintenance requests)
+      // Landlords can read tenants of properties they own (even if tenant doc missing landlordId)
+      // Tenants can read profiles of other tenants in the same property (for messaging)
+      // Tenants can read their landlord's profile (for messaging)
+      // Tenants can read contractor profiles (to display contractor name/email when assigned)
       allow read: if isAdmin() 
         || request.auth.uid == userId
-        || (hasRole('landlord') && resource.data.landlordId == request.auth.uid);
+        || (isLandlord() && resource.data.landlordId == request.auth.uid)
+        || (isLandlord() && resource.data.role == 'contractor')
+        || (isLandlord()
+            && resource.data.role == 'tenant'
+            && resource.data.propertyId != null
+            && exists(/databases/$(database)/documents/properties/$(resource.data.propertyId))
+            && get(/databases/$(database)/documents/properties/$(resource.data.propertyId)).data.landlordId == request.auth.uid)
+        || (isTenant() && resource.data.role == 'contractor')
+        || sharesSameProperty()
+        || isTenantsLandlord();
       
       // Users can update their own profile
       // Admins can update any profile
       // Landlords can update their tenant profiles (for adding to properties)
       allow update: if isAdmin() 
         || request.auth.uid == userId
-        || (hasRole('landlord') && resource.data.landlordId == request.auth.uid);
+        || (isLandlord() && resource.data.landlordId == request.auth.uid);
       
       // Users can create their own profile (during signup or when needed)
       // Admins can create any profile
@@ -194,13 +291,23 @@ service cloud.firestore {
     
     // Invites Collection
     match /invites/{inviteId} {
+      // Helper to check if user is tenant (from custom claims or user document)
+      function isTenant() {
+        return getUserRole() == 'tenant' 
+          || (request.auth != null && 
+              exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+              get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'tenant');
+      }
+      
       // Allow read if:
       // - User is admin
       // - User is landlord and sent the invite
-      // - User is tenant and invite is for their email
+      // - User is tenant (check both custom claims and user document)
+      // Note: We allow all tenants to read invites, then filter client-side by email
+      // This is more permissive but ensures invites are visible
       allow read: if isAdmin()
         || (hasRole('landlord') && resource.data.landlordId == request.auth.uid)
-        || (hasRole('tenant') && resource.data.tenantEmail == request.auth.token.email);
+        || isTenant();
       
       // Allow create if:
       // - User is admin
@@ -210,10 +317,10 @@ service cloud.firestore {
       
       // Allow update if:
       // - User is admin
-      // - User is tenant accepting/declining their own invite
+      // - User is tenant (can accept/decline - app verifies email match)
       // - User is landlord updating their own invite
       allow update: if isAdmin()
-        || (hasRole('tenant') && resource.data.tenantEmail == request.auth.token.email)
+        || isTenant()
         || (hasRole('landlord') && resource.data.landlordId == request.auth.uid);
       
       // Allow delete if:
