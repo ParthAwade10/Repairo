@@ -178,6 +178,8 @@ service cloud.firestore {
       // - User is tenant and lives in the property (check both tenantIds array and user document propertyId)
       allow read: if isAdmin()
         || (hasRole('landlord') && resource.data.landlordId == request.auth.uid)
+        // Fallback: allow landlords by UID even if role claim missing
+        || (request.auth != null && resource.data.landlordId == request.auth.uid)
         || tenantAssignedToProperty();
       
       // Allow create if:
@@ -201,18 +203,16 @@ service cloud.firestore {
       // - User is landlord and owns the property
       allow update: if isAdmin()
         || (hasRole('landlord') && resource.data.landlordId == request.auth.uid)
-        || (request.auth != null 
-            && resource.data.landlordId == request.auth.uid
-            && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'landlord');
+        // Fallback: allow landlord by UID even if role claim/document missing
+        || (request.auth != null && resource.data.landlordId == request.auth.uid);
       
       // Allow delete if:
       // - User is admin
       // - User is landlord and owns the property
       allow delete: if isAdmin()
         || (hasRole('landlord') && resource.data.landlordId == request.auth.uid)
-        || (request.auth != null 
-            && resource.data.landlordId == request.auth.uid
-            && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'landlord');
+        // Fallback: allow landlord by UID even if role claim/document missing
+        || (request.auth != null && resource.data.landlordId == request.auth.uid);
     }
     
     // Users Collection (if you store user profiles)
@@ -307,13 +307,17 @@ service cloud.firestore {
       // This is more permissive but ensures invites are visible
       allow read: if isAdmin()
         || (hasRole('landlord') && resource.data.landlordId == request.auth.uid)
+        // Fallback: allow landlord by UID even if role claim missing
+        || (request.auth != null && resource.data.landlordId == request.auth.uid)
         || isTenant();
       
       // Allow create if:
       // - User is admin
       // - User is landlord (can send invites)
       allow create: if isAdmin()
-        || (hasRole('landlord') && request.resource.data.landlordId == request.auth.uid);
+        || (hasRole('landlord') && request.resource.data.landlordId == request.auth.uid)
+        // Fallback: allow landlord by UID even if role claim missing
+        || (request.auth != null && request.resource.data.landlordId == request.auth.uid);
       
       // Allow update if:
       // - User is admin
@@ -321,13 +325,17 @@ service cloud.firestore {
       // - User is landlord updating their own invite
       allow update: if isAdmin()
         || isTenant()
-        || (hasRole('landlord') && resource.data.landlordId == request.auth.uid);
+        || (hasRole('landlord') && resource.data.landlordId == request.auth.uid)
+        // Fallback: allow landlord by UID even if role claim missing
+        || (request.auth != null && resource.data.landlordId == request.auth.uid);
       
       // Allow delete if:
       // - User is admin
       // - User is landlord who sent the invite
       allow delete: if isAdmin()
-        || (hasRole('landlord') && resource.data.landlordId == request.auth.uid);
+        || (hasRole('landlord') && resource.data.landlordId == request.auth.uid)
+        // Fallback: allow landlord by UID even if role claim missing
+        || (request.auth != null && resource.data.landlordId == request.auth.uid);
     }
   }
 }

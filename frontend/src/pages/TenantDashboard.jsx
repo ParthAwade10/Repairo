@@ -1549,34 +1549,43 @@ export default function TenantDashboard() {
                 {invitesWithDetails.map((invite) => (
                   <div
                     key={invite.id}
-                    className="bg-white rounded-lg p-4 border border-blue-200"
+                    className="bg-yellow-50 rounded-lg p-4 border border-yellow-200"
                   >
                     <div className="mb-3">
                       <p className="text-sm font-semibold text-gray-900 mb-1">
                         Invitation from:
                       </p>
-                      {invite.landlordInfo ? (
-                        <div className="text-sm text-gray-700">
-                          <p className="font-medium">
-                            {invite.landlordInfo.name || invite.landlordInfo.email || 'Landlord'}
-                          </p>
-                          {invite.landlordInfo.email && (
-                            <p className="text-xs text-gray-600">
-                              {invite.landlordInfo.email}
-                            </p>
-                          )}
-                        </div>
-                      ) : invite.landlordId ? (
-                        <div className="text-sm text-gray-500">
-                          <p className="italic">Loading landlord info...</p>
-                          <p className="text-xs">Landlord ID: {invite.landlordId.substring(0, 8)}...</p>
-                        </div>
-                      ) : (
-                        <p className="text-sm text-gray-500 italic">No landlord info available</p>
-                      )}
+                      {(() => {
+                        const landlordDisplayName =
+                          (invite.landlordInfo?.firstName || invite.landlordInfo?.lastName)
+                            ? `${invite.landlordInfo?.firstName?.trim() || ''} ${invite.landlordInfo?.lastName?.trim() || ''}`.trim()
+                            : invite.landlordInfo?.name
+                            || invite.landlordInfo?.email
+                            || invite.landlordEmail
+                            || 'Landlord';
+                        const landlordEmail = invite.landlordInfo?.email || invite.landlordEmail || '';
+
+                        if (invite.landlordInfo || invite.landlordId || invite.landlordEmail) {
+                          return (
+                            <div className="text-sm text-gray-700">
+                              <p className="font-medium">{landlordDisplayName}</p>
+                              {landlordEmail && landlordEmail !== landlordDisplayName && (
+                                <p className="text-xs text-gray-600">{landlordEmail}</p>
+                              )}
+                              {invite.landlordId && (
+                                <p className="text-xs text-gray-500 mt-1">
+                                  Landlord ID: {invite.landlordId.substring(0, 8)}...
+                                </p>
+                              )}
+                            </div>
+                          );
+                        }
+
+                        return <p className="text-sm text-gray-500 italic">No landlord info available</p>;
+                      })()}
                     </div>
                     
-                    {invite.propertyId && (
+                      {invite.propertyId && (
                       <div className="mb-3 pt-3 border-t border-gray-200">
                         <p className="text-xs font-semibold text-gray-500 mb-1">Property:</p>
                         {invite.propertyInfo ? (
@@ -1584,6 +1593,18 @@ export default function TenantDashboard() {
                             <p className="font-medium">
                               {invite.propertyInfo.address ||
                                 [invite.propertyInfo.addressLine1, invite.propertyInfo.city, invite.propertyInfo.state, invite.propertyInfo.zipcode]
+                                  .filter(Boolean)
+                                  .join(', ')}
+                            </p>
+                            <p className="text-xs text-gray-500 mt-1">
+                              ID: {invite.propertyId}
+                            </p>
+                          </div>
+                        ) : invite.propertyAddress ? (
+                          <div className="text-sm text-gray-700">
+                            <p className="font-medium">
+                              {invite.propertyAddress.address ||
+                                [invite.propertyAddress.addressLine1, invite.propertyAddress.city, invite.propertyAddress.state, invite.propertyAddress.zipcode]
                                   .filter(Boolean)
                                   .join(', ')}
                             </p>

@@ -25,9 +25,11 @@ const INVITES_COLLECTION = 'invites';
  * @param {string} landlordId - Landlord user ID
  * @param {string} tenantEmail - Tenant email address
  * @param {string} propertyId - Property ID (optional)
+ * @param {Object} propertyDetails - Optional property snapshot (address info)
+ * @param {string} landlordEmail - Optional landlord email for display
  * @returns {Promise<string>} Invite document ID
  */
-export const createInvite = async (landlordId, tenantEmail, propertyId = null) => {
+export const createInvite = async (landlordId, tenantEmail, propertyId = null, propertyDetails = null, landlordEmail = null) => {
   const invitesRef = collection(db, INVITES_COLLECTION);
   
   // Normalize email for consistency
@@ -53,6 +55,22 @@ export const createInvite = async (landlordId, tenantEmail, propertyId = null) =
     status: 'pending',
     createdAt: Timestamp.now(),
   };
+  
+  // Attach property snapshot for tenant display (so they can see address before joining)
+  if (propertyDetails) {
+    inviteData.propertyAddress = {
+      address: propertyDetails.address || '',
+      addressLine1: propertyDetails.addressLine1 || '',
+      city: propertyDetails.city || '',
+      state: propertyDetails.state || '',
+      zipcode: propertyDetails.zipcode || '',
+    };
+  }
+  
+  // Attach landlord email for display
+  if (landlordEmail) {
+    inviteData.landlordEmail = landlordEmail;
+  }
   
   console.log('Creating invite with data:', inviteData);
   const docRef = await addDoc(invitesRef, inviteData);

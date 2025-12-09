@@ -539,8 +539,8 @@ export default function MaintenanceRequestDetail() {
               </div>
 
               {/* Suggested Contractors */}
-              <div className="bg-white shadow-lg rounded-xl border border-gray-200 p-6">
-                <div className="flex justify-between items-center mb-3">
+              <div className="bg-white shadow-lg rounded-xl border border-gray-200 p-6 overflow-hidden">
+                <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-2 mb-3">
                   <h3 className="text-lg font-semibold text-gray-900 flex items-center gap-2">
                     <svg className="w-5 h-5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-5.714 2.143L13 21l-2.286-6.857L5 12l5.714-2.143L13 3z" />
@@ -556,29 +556,29 @@ export default function MaintenanceRequestDetail() {
                 ) : (
                   <div className="space-y-3">
                     {suggestedContractors.map((c) => (
-                      <div key={c.id} className="border border-gray-200 bg-white rounded-xl p-4 shadow-sm hover:shadow-md transition-all duration-200">
-                        <div className="flex justify-between items-start gap-3">
+                      <div key={c.id} className="border border-gray-200 bg-white rounded-xl p-4 shadow-sm hover:shadow-md transition-all duration-200 overflow-hidden">
+                        <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3 overflow-hidden">
                           <div className="space-y-1">
                             <p className="font-semibold text-gray-900">{c.name}</p>
-                            <p className="text-sm text-gray-600">{c.email}</p>
-                            <p className="text-sm text-gray-600">{c.phone}</p>
+                            <p className="text-sm text-gray-600 break-words break-all">{c.email}</p>
+                            <p className="text-sm text-gray-600 break-words break-all">{c.phone}</p>
                             <p className="text-xs text-gray-500">
                               Areas: {c.areas.join(', ')}
                             </p>
                           </div>
-                          <div className="text-right text-sm text-gray-800">
-                            <div className="flex items-center justify-end gap-1 font-semibold">
+                          <div className="flex flex-col md:items-end gap-1 text-sm text-gray-800 min-w-[150px]">
+                            <div className="flex items-center md:justify-end gap-1 font-semibold">
                               <span>{c.rating.toFixed(1)}</span>
                               <span className="text-amber-500">★</span>
                             </div>
                             <div className="text-xs text-gray-500">{c.reviewCount} reviews</div>
                             {userRole === 'landlord' && (
-                              <div className="text-xs text-gray-600 mt-1">
+                              <div className="text-xs text-gray-600">
                                 Est. price: ${c.price}
                               </div>
                             )}
                             {userRole === 'landlord' && (
-                              <div className="mt-2 flex gap-2">
+                              <div className="flex gap-2 mt-1">
                                 <button
                                   onClick={() => handleContactContractor(c.id)}
                                   className="inline-flex items-center justify-center px-3 py-1.5 rounded-lg bg-blue-600 text-white text-xs hover:bg-blue-700 shadow-sm hover:shadow-md transition-all duration-200 font-medium"
@@ -608,8 +608,8 @@ export default function MaintenanceRequestDetail() {
               </div>
 
               {/* Contractors in Area */}
-              <div className="bg-white shadow-lg rounded-xl border border-gray-200 p-6">
-                <div className="flex justify-between items-center mb-3">
+              <div className="bg-white shadow-lg rounded-xl border border-gray-200 p-6 overflow-hidden">
+                <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-2 mb-3">
                   <h3 className="text-lg font-semibold text-gray-900 flex items-center gap-2">
                     <svg className="w-5 h-5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
@@ -623,26 +623,26 @@ export default function MaintenanceRequestDetail() {
                 ) : (
                   <div className="space-y-3">
                     {areaContractors.map((c) => (
-                      <div key={c.id} className="border border-gray-200 bg-white rounded-xl p-4 shadow-sm hover:shadow-md transition-all duration-200">
-                        <div className="flex justify-between items-start gap-3">
+                      <div key={c.id} className="border border-gray-200 bg-white rounded-xl p-4 shadow-sm hover:shadow-md transition-all duration-200 overflow-hidden">
+                        <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3 overflow-hidden">
                           <div className="space-y-1">
                             <p className="font-semibold text-gray-900">{c.name}</p>
-                            <p className="text-sm text-gray-600">{c.email}</p>
-                            <p className="text-sm text-gray-600">{c.phone}</p>
+                            <p className="text-sm text-gray-600 break-words break-all">{c.email}</p>
+                            <p className="text-sm text-gray-600 break-words break-all">{c.phone}</p>
                             <p className="text-xs text-gray-500">Areas: {c.areas.join(', ')}</p>
                           </div>
-                          <div className="text-right text-sm text-gray-800">
-                            <div className="flex items-center justify-end gap-1 font-semibold">
+                          <div className="flex flex-col md:items-end gap-1 text-sm text-gray-800 min-w-[150px]">
+                            <div className="flex items-center md:justify-end gap-1 font-semibold">
                               <span>{c.rating.toFixed(1)}</span>
                               <span className="text-amber-500">★</span>
                             </div>
                             <div className="text-xs text-gray-500">{c.reviewCount} reviews</div>
                             {userRole === 'landlord' && (
                               <>
-                                <div className="text-xs text-gray-600 mt-1">
+                                <div className="text-xs text-gray-600">
                                   Est. price: ${c.price ?? c.prices?.general ?? '—'}
                                 </div>
-                                <div className="mt-2 flex gap-2">
+                                <div className="flex gap-2 mt-1">
                                   <button
                                     onClick={() => handleContactContractor(c.id)}
                                     className="inline-flex items-center justify-center px-3 py-1.5 rounded-lg bg-blue-600 text-white text-xs hover:bg-blue-700 shadow-sm hover:shadow-md transition-all duration-200 font-medium"
