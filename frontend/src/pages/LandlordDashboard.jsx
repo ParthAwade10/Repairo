@@ -18,7 +18,7 @@ import {
   removeTenantFromProperty,
   deleteProperty,
 } from '../api/properties';
-import { doc, getDoc, getDocs, query, where, collection, updateDoc, orderBy, onSnapshot } from 'firebase/firestore';
+import { doc, getDoc, getDocs, query, where, collection, updateDoc, orderBy, onSnapshot, Timestamp } from 'firebase/firestore';
 import { db } from '../firebase/config';
 import { getUserChatRooms, createChatRoom, subscribeToMessages, sendMessage, deleteMessage, getChatRoomByRequestId, addMemberToRoom } from '../api/messaging';
 import Logo from '../components/Logo';
@@ -774,6 +774,11 @@ export default function LandlordDashboard() {
     setInviteError('');
     setInviteSuccess('');
     setInviteLoading(true);
+    console.log('🟦 Send invite clicked', {
+      tenantEmail,
+      selectedPropertyId: selectedProperty?.id,
+      selectedPropertyPropertyId: selectedProperty?.propertyId,
+    });
 
     if (!tenantEmail.trim()) {
       setInviteError('Please enter a tenant email');
@@ -789,7 +794,21 @@ export default function LandlordDashboard() {
 
     try {
       // Create invite with property ID
-      await createInvite(currentUser.uid, tenantEmail.trim(), selectedProperty.propertyId);
+      console.log('🟦 Creating invite...');
+      await createInvite(
+        currentUser.uid,
+        tenantEmail.trim(),
+        selectedProperty.propertyId,
+        {
+          address: selectedProperty.address,
+          addressLine1: selectedProperty.addressLine1,
+          city: selectedProperty.city,
+          state: selectedProperty.state,
+          zipcode: selectedProperty.zipcode,
+        },
+        currentUser.email
+      );
+      console.log('✅ Invite created');
       
       // Try to find existing tenant by email and add to property
       try {
@@ -832,6 +851,7 @@ export default function LandlordDashboard() {
       // Also reload tenants list for messaging
       await loadAllTenants();
     } catch (error) {
+      console.error('❌ Send invite error:', error);
       setInviteError(error.message || 'Failed to add tenant');
     } finally {
       setInviteLoading(false);
@@ -861,6 +881,35 @@ export default function LandlordDashboard() {
         landlordId: null,
       });
 
+      // Mark any accepted invites for this tenant/property as declined to prevent re-sync
+      const invitesToUpdate = propertyInvites.filter(
+        (invite) =>
+          invite.propertyId === selectedProperty.propertyId &&
+          invite.tenantId === tenantId &&
+          invite.status === 'accepted'
+      );
+      for (const invite of invitesToUpdate) {
+        try {
+          await updateDoc(doc(db, 'invites', invite.id), {
+            status: 'declined',
+            declinedAt: Timestamp.now(),
+          });
+        } catch (err) {
+          console.warn('Failed to mark invite declined:', invite.id, err);
+        }
+      }
+
+      // Update local invites state to reflect decline
+      if (invitesToUpdate.length > 0) {
+        setPropertyInvites((prev) =>
+          prev.map((inv) =>
+            invitesToUpdate.find((i) => i.id === inv.id)
+              ? { ...inv, status: 'declined' }
+              : inv
+          )
+        );
+      }
+
       // Reload property tenants
       const updatedTenants = await getPropertyTenants(selectedProperty.id);
       setPropertyTenants(updatedTenants);
@@ -872,6 +921,61 @@ export default function LandlordDashboard() {
     } catch (error) {
       console.error('Error removing tenant:', error);
       alert(`Failed to remove tenant: ${error.message}`);
+    }
+  };
+
+  // Force remove an invite/tenant entry shown in invites list (accepted or pending)
+  const handleForceRemoveInvite = async (invite) => {
+    if (!selectedProperty) {
+      alert('Please select a property first');
+      return;
+    }
+    if (!window.confirm('Remove this tenant/invite from the property?')) {
+      return;
+    }
+
+    try {
+      // If invite has tenantId, remove from property and clear user doc
+      if (invite.tenantId) {
+        try {
+          await removeTenantFromProperty(selectedProperty.id, invite.tenantId);
+        } catch (err) {
+          console.warn('Could not remove tenant from property (might already be removed):', err);
+        }
+
+        try {
+          const tenantRef = doc(db, 'users', invite.tenantId);
+          await updateDoc(tenantRef, {
+            propertyId: null,
+            landlordId: null,
+          });
+        } catch (err) {
+          console.warn('Could not update tenant user doc:', err);
+        }
+      }
+
+      // Mark invite declined
+      try {
+        await updateDoc(doc(db, 'invites', invite.id), {
+          status: 'declined',
+          declinedAt: Timestamp.now(),
+        });
+      } catch (err) {
+        console.warn('Could not update invite status:', err);
+      }
+
+      // Refresh local state
+      setPropertyInvites((prev) =>
+        prev.map((inv) => (inv.id === invite.id ? { ...inv, status: 'declined' } : inv))
+      );
+      const updatedTenants = await getPropertyTenants(selectedProperty.id);
+      setPropertyTenants(updatedTenants);
+      await loadAllTenants();
+
+      alert('Tenant/invite removed.');
+    } catch (error) {
+      console.error('Error force-removing invite/tenant:', error);
+      alert(`Failed to remove: ${error.message}`);
     }
   };
 
@@ -1795,8 +1899,8 @@ export default function LandlordDashboard() {
             {/* Properties List */}
             <div className="lg:col-span-1">
               <div className="bg-white rounded-xl shadow-lg border border-gray-200 p-6">
-                <div className="flex justify-between items-center mb-6">
-                  <div className="flex items-center gap-2">
+                <div className="flex justify-between items-center mb-6 gap-4">
+                  <div className="flex items-center gap-3">
                     <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center">
                       <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
@@ -2100,7 +2204,7 @@ export default function LandlordDashboard() {
                                 d="M5.121 17.804A10.97 10.97 0 0112 15c2.21 0 4.266.64 6.004 1.739M15 10a3 3 0 11-6 0 3 3 0 016 0z"
                               />
                             </svg>
-                            {inviteLoading ? 'Adding...' : 'Add Tenant'}
+                            {inviteLoading ? 'Sending...' : 'Send Invite'}
                           </button>
                           <button
                             type="button"
@@ -2151,7 +2255,7 @@ export default function LandlordDashboard() {
                             </button>
                           )}
                         </div>
-                      {propertyTenants.length === 0 && propertyInvites.filter(i => i.status === 'accepted').length === 0 ? (
+                      {propertyTenants.length === 0 && propertyInvites.filter(i => i.status === 'accepted' || i.status === 'pending').length === 0 ? (
                         <p className="text-gray-500 text-sm">No tenants added yet.</p>
                       ) : (
                         <div className="space-y-2">
@@ -2202,16 +2306,25 @@ export default function LandlordDashboard() {
                             .map((invite) => (
                               <div
                                 key={invite.id}
-                                className="p-3 bg-blue-50 rounded-lg border border-blue-200"
+                                className="p-3 bg-yellow-50 rounded-lg border border-yellow-200"
                               >
                                 <div className="flex items-center justify-between">
                                   <div>
                                     <div className="font-medium text-gray-900">{invite.tenantEmail}</div>
                                     <div className="text-xs text-gray-500">Invite sent</div>
                                   </div>
-                                  <span className="text-xs bg-blue-100 text-blue-800 px-2 py-1 rounded">
-                                    Pending
-                                  </span>
+                                  <div className="flex items-center gap-2">
+                                    <span className="text-xs bg-yellow-100 text-yellow-800 px-2 py-1 rounded">
+                                      Pending
+                                    </span>
+                                    <button
+                                      onClick={() => handleForceRemoveInvite(invite)}
+                                      className="text-xs text-red-600 hover:text-red-700 bg-red-50 hover:bg-red-100 px-2 py-1 rounded transition-colors"
+                                      title="Remove this invite"
+                                    >
+                                      Remove
+                                    </button>
+                                  </div>
                                 </div>
                               </div>
                             ))}
@@ -2229,9 +2342,18 @@ export default function LandlordDashboard() {
                                     <div className="font-medium text-gray-900">{invite.tenantEmail}</div>
                                     <div className="text-xs text-gray-500">Accepted invite</div>
                                   </div>
-                                  <span className="text-xs bg-blue-100 text-blue-800 px-2 py-1 rounded">
-                                    ✓ Accepted
-                                  </span>
+                                  <div className="flex items-center gap-2">
+                                    <span className="text-xs bg-blue-100 text-blue-800 px-2 py-1 rounded">
+                                      ✓ Accepted
+                                    </span>
+                                    <button
+                                      onClick={() => handleForceRemoveInvite(invite)}
+                                      className="text-xs text-red-600 hover:text-red-700 bg-red-50 hover:bg-red-100 px-2 py-1 rounded transition-colors"
+                                      title="Remove this tenant/invite"
+                                    >
+                                      Remove
+                                    </button>
+                                  </div>
                                 </div>
                               </div>
                             ))}

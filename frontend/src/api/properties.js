@@ -306,17 +306,17 @@ export const getPropertyMaintenanceRequests = async (propertyId) => {
   const maintenanceRef = collection(db, 'maintenanceRequests');
   
   try {
-    const q = query(
-      maintenanceRef,
-      where('propertyId', '==', propertyId),
-      orderBy('createdAt', 'desc')
-    );
-    
-    const querySnapshot = await getDocs(q);
-    return querySnapshot.docs.map(doc => ({
-      id: doc.id,
-      ...doc.data(),
-    }));
+  const q = query(
+    maintenanceRef,
+    where('propertyId', '==', propertyId),
+    orderBy('createdAt', 'desc')
+  );
+  
+  const querySnapshot = await getDocs(q);
+  return querySnapshot.docs.map(doc => ({
+    id: doc.id,
+    ...doc.data(),
+  }));
   } catch (error) {
     // If orderBy fails (missing index), try without it
     if (error.code === 'failed-precondition') {
